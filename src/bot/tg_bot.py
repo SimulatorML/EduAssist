@@ -13,7 +13,7 @@ rag_system_url = "https://www.google.ru/"
 api_key = "YOUR_API_KEY"
 
 # Настройка Telegram бота
-TELEGRAM_TOKEN = '7454769274:AAEJgztKUOAj5x60R6tsT2GZHfI1YIKJYJg'  # Токен вашего Telegram бота
+TELEGRAM_TOKEN = ''  # Токен вашего Telegram бота
 bot = Bot(token=TELEGRAM_TOKEN)
 application = Application.builder().token(TELEGRAM_TOKEN).build()
 
