@@ -43,11 +43,14 @@ class ChromaWrapper:
             collection_name=collection_name,
         )
 
-    def load(self):
-        if os.path.exists(self.persist_directory):
+    def load(self, collection_name: str='default'):
+        collection_names = [c.name for c in self.client.list_collections()]
+
+        if collection_name in collection_names:
             self.langchain_chroma = Chroma(
                 client=self.client,
                 embedding_function=self.embedding_function,
+                collection_name=collection_name
             )
         else:
             raise FileExistsError('Chroma is not initialized')

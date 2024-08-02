@@ -4,10 +4,12 @@ from rag_updated import RAG, LLM, ChromaWrapper
 from tg_bot_simplified import TelegramBot
 from parser_updated import main as parser_main
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.llms import OpenLLM
 from yandex_chain import YandexLLM, YandexEmbeddings
 from langchain_community.embeddings.gigachat import GigaChatEmbeddings
 from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 
 def initialize_rag():
     load_dotenv()
