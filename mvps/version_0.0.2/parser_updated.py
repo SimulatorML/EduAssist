@@ -2,34 +2,72 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
 
 def fetch_olympiad_page(url):
-    print(f"Loading URL: {url}")
-    return requests.get(url).content
+    """Загружает HTML-содержимое по предоставленному URL.
+
+    :param str url: URL веб-страницы для загрузки.
+    :rtype str: HTML-содержимое веб-страницы.
+    """
+    print(f"Загрузка URL: {url}")
+    response = requests.get(url)
+    response.raise_for_status()  # Проверка наличия ошибок при запросе
+    return response.content
 
 def extract_olympiad_data(html):
+    """Извлекает данные об олимпиаде из предоставленного HTML-содержимого.
+
+    :param str html: HTML-содержимое веб-страницы.
+    :rtype dict: Разобранные данные, включающие детали олимпиады.
+    """
     soup = BeautifulSoup(html, 'html.parser')
     parsed_data = {}
 
-    meta_tags = {'description': 'name', 'keywords': 'name', 'image': 'property', 'url': 'property'}
-    for key, attr in meta_tags.items():
-        meta = soup.find('meta', {attr: f"og:{key}" if key in ['image', 'url'] else key})
-        if meta:
-            parsed_data[key] = meta.get('content')
+    # Извлечение заголовка
+    title = soup.title.string.strip() if soup.title else None
+    if title:
+        parsed_data['title'] = title
 
-    if soup.title:
-        parsed_data['title'] = soup.title.string.strip()
+    # Извлечение мета-описания
+    meta_description = soup.find('meta', {'name': 'description'})
+    if meta_description:
+        parsed_data['description'] = meta_description['content']
 
+    # Извлечение мета-ключевых слов
+    meta_keywords = soup.find('meta', {'name': 'keywords'})
+    if meta_keywords:
+        parsed_data['keywords'] = meta_keywords['content']
+
+    # Извлечение мета-изображения
+    meta_image = soup.find('meta', {'property': 'og:image'})
+    if meta_image:
+        parsed_data['image'] = meta_image['content']
+
+    # Извлечение мета-URL
+    meta_url = soup.find('meta', {'property': 'og:url'})
+    if meta_url:
+        parsed_data['url'] = meta_url['content']
+
+    # Извлечение информации о проведении олимпиады
+    status_div = soup.find('div', class_='tc-status')
+    if status_div:
+        status_text = status_div.get_text(strip=True)
+        parsed_data['status'] = status_text
+
+    # Извлечение названий событий и дат
     events = []
-    for row in soup.select('table tr'):
-        event_name = row.find('div', class_='event_name')
-        event_date = row.find_all('a')
-        if event_name and len(event_date) > 1:
-            events.append({
-                'name': event_name.get_text(strip=True),
-                'date': event_date[1].get_text(strip=True)
-            })
+    events_rows = soup.select('table tr')
+    for row in events_rows:
+        event_name_div = row.find('div', class_='event_name')
+        event_date_link = row.find_all('a')
+        if event_name_div and len(event_date_link) > 1:
+            event_name = event_name_div.get_text(strip=True)
+            event_date = event_date_link[1].get_text(strip=True)
+            events.append({'name': event_name, 'date': event_date})
 
     if events:
         parsed_data['events'] = events
@@ -37,44 +75,74 @@ def extract_olympiad_data(html):
     return parsed_data
 
 def fetch_all_olympiad_links(main_url):
-    soup = BeautifulSoup(fetch_olympiad_page(main_url), 'html.parser')
-    return [f'https://olimpiada.ru{link["href"]}' for link in soup.find_all('a', href=True) if '/activity/' in link['href']]
+    """Загружает все ссылки на олимпиады с главной страницы используя Selenium.
 
-def process_olympiad(link):
+    :param str main_url: URL главной страницы со списком всех олимпиад.
+    :rtype list: Список URL для каждой страницы олимпиады.
+    """
+    # Настройка Selenium WebDriver
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Запуск в фоновом режиме
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+
+    executable_path = r'C:\Users\user\Downloads\chromedriver-win64\chromedriver.exe' # Замените на путь к вашему chromedriver
+    service = Service(executable_path = executable_path)  
+
     try:
-        return extract_olympiad_data(fetch_olympiad_page(link))
+        driver = webdriver.Chrome(service=service, options=chrome_options)
     except Exception as e:
-        print(f"Error fetching data from {link}: {e}")
-        return None
+        print(f"Ошибка создания сессии WebDriver: {e}")
+        return []
 
-def dict_to_string(data):
-    return "\n".join(f"{key}: {value}" for key, value in data.items() if key != 'events') + \
-           "\nEvents:\n" + "\n".join(f"- {event['name']} ({event['date']})" for event in data.get('events', []))
+    driver.get(main_url)
+
+    # Прокрутка страницы до конца для загрузки всех элементов
+    """" В этой чати кода мы прокручиваем страницу до того момента, пока прокрутка не будет изменять размер страницы, тоесть мы не упремся в дно"""
+    last_height = driver.execute_script("return document.body.scrollHeight")
+    while True:
+        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        time.sleep(10)  # Ждем, чтобы контент успел подгрузиться
+        new_height = driver.execute_script("return document.body.scrollHeight")
+        if new_height == last_height:
+            break
+        last_height = new_height
+
+    olympiad_links = set()  # Используем множество для исключения дубликатов
+
+    # Нахождение всех ссылок
+    links = driver.find_elements(By.TAG_NAME, 'a')
+    for link in links:
+        href = link.get_attribute('href')
+        if href and '/activity/' in href:
+            olympiad_links.add(href)
+
+    driver.quit()
+    return list(olympiad_links)
 
 def main():
     main_url = 'https://olimpiada.ru/activities'
+
+    # Загружаем все ссылки на олимпиады
     olympiad_links = fetch_all_olympiad_links(main_url)
     print(f"Found {len(olympiad_links)} olympiad links")
 
+    # Загружаем и разбираем данные для каждой олимпиады
     all_olympiad_data = []
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_link = {executor.submit(process_olympiad, link): link for link in olympiad_links}
-        for future in as_completed(future_to_link):
-            data = future.result()
-            if data:
-                all_olympiad_data.append(data)
-            time.sleep(0.2)
+    for link in olympiad_links:
+        try:
+            html = fetch_olympiad_page(link)
+            parsed_data = extract_olympiad_data(html)
+            all_olympiad_data.append(parsed_data)
+        except Exception as e:
+            print(f"Error fetching data from {link}: {e}")
+        time.sleep(1)  # Во избежание блокировки сайта из-за слишком большого количества запросов
 
-    # Transform the list of dictionaries to a list of strings
-    olympiad_strings = [dict_to_string(data) for data in all_olympiad_data]
+    # Сохраняем все данные в JSON-файл
+    with open('all_olympiads.json', 'w', encoding='utf-8') as json_file:
+        json.dump(all_olympiad_data, json_file, ensure_ascii=False, indent=2)
 
-    # Save the list of strings to a JSON file
-    with open('all_olympiads_strings.json', 'w', encoding='utf-8') as json_file:
-        json.dump(olympiad_strings, json_file, ensure_ascii=False, indent=2)
-
-    print("Data has been saved to all_olympiads_strings.json")
-    
-    return olympiad_strings
+    print("Data has been saved to all_olympiads.json")
 
 if __name__ == '__main__':
     main()
