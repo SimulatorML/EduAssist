@@ -7,12 +7,14 @@ from chroma_db_managment import ChromaManager
 
 load_dotenv()
 TOKEN = os.getenv("TELEGRAM_API_KEY")
-MAX_HISTORY = 5
+MAX_HISTORY = 10
 
 model = llm_type()
 
 manager = ChromaManager()
 manager.load("raw_data")
+
+dump_storage = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     context.user_data['message_history'] = []
@@ -23,15 +25,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     # Добавляем новое сообщение в историю
-    if 'message_history' not in context.user_data:
-        context.user_data['message_history'] = [{"text": 'random'}]
-    print("--------------------------------")
-    messages = context.user_data['message_history']
-    if len(messages) == 0:
-        messages = [{   
+    user_id = update.message.from_user.id
+    if user_id not in dump_storage:
+        dump_storage[user_id] = [{   
                 "role": "system",
                 "text": "Привет, ты мой собеседник, который рассказывает мне обо всех своих возможностях!"
-        }]   
+        }]
+
+    messages = dump_storage[user_id]
         
 
     user_message = update.message.text
@@ -53,7 +54,8 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     messages += [user_m, assistant_m]
     if len(messages) > 10:
         messages = messages[:1] + messages[-9:]
-    print(messages)
+
+    dump_storage[user_id] = messages
     
     await update.message.reply_text(f"{answer['text']}")
 

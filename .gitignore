@@ -4,3 +4,4 @@ venv
 __pycache__
 chroma_db
 key_info.md
+*.json
