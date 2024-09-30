@@ -6,6 +6,7 @@ import json
 if __name__ == "__main__":
     with open("all_olympiads_strings.json", 'r') as file:
         data = json.load(file)
+        data = [str(row) for row in data]
     manager = ChromaManager()
 
     manager.create_collection(strings=data, collection_name="raw_data")

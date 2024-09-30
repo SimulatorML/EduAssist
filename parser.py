@@ -66,15 +66,14 @@ def main():
             time.sleep(0.2)
 
     # Transform the list of dictionaries to a list of strings
-    olympiad_strings = [dict_to_string(data) for data in all_olympiad_data]
 
     # Save the list of strings to a JSON file
     with open('all_olympiads_strings.json', 'w', encoding='utf-8') as json_file:
-        json.dump(olympiad_strings, json_file, ensure_ascii=False, indent=2)
+        json.dump(all_olympiad_data, json_file, ensure_ascii=False, indent=2)
 
     print("Data has been saved to all_olympiads_strings.json")
     
-    return olympiad_strings
+    return all_olympiad_data
 
 if __name__ == '__main__':
     main()
